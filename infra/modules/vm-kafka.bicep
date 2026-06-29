@@ -50,19 +50,7 @@ runcmd:
   - chown -R 1000:1000 /data/kafka
 '''
 
-// --- Public IP (temporary, for SSH access during dev) ---
-resource publicIp 'Microsoft.Network/publicIPAddresses@2023-11-01' = {
-  name: '${namePrefix}-kafka-pip'
-  location: location
-  sku: {
-    name: 'Standard'
-  }
-  properties: {
-    publicIPAllocationMethod: 'Static'
-  }
-}
-
-// --- NIC ---
+// --- NIC (private IP only — use 'az ssh vm' for access) ---
 resource nic 'Microsoft.Network/networkInterfaces@2023-11-01' = {
   name: '${namePrefix}-kafka-nic'
   location: location
@@ -74,9 +62,6 @@ resource nic 'Microsoft.Network/networkInterfaces@2023-11-01' = {
           privateIPAllocationMethod: 'Dynamic'
           subnet: {
             id: subnetId
-          }
-          publicIPAddress: {
-            id: publicIp.id
           }
         }
       }
@@ -150,5 +135,4 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-03-01' = {
 output vmId string = vm.id
 output vmName string = vm.name
 output vmPrivateIp string = nic.properties.ipConfigurations[0].properties.privateIPAddress
-output vmPublicIp string = publicIp.properties.ipAddress
 output adminUsername string = adminUsername

@@ -11,9 +11,6 @@ param location string = 'westeurope'
 @maxLength(15)
 param namePrefix string = 'kafkadev01'
 
-@description('Your public IP for SSH access (CIDR, e.g. 1.2.3.4/32). Find at https://ifconfig.me')
-param allowedSshSourceIp string
-
 @description('SSH public key for the Kafka VM')
 @secure()
 param adminSshPublicKey string
@@ -24,7 +21,6 @@ module network 'modules/network.bicep' = {
   params: {
     location: location
     namePrefix: namePrefix
-    allowedSshSourceIp: allowedSshSourceIp
   }
 }
 
@@ -61,9 +57,9 @@ module kafkaVm 'modules/vm-kafka.bicep' = {
 }
 
 // --- Outputs ---
-output kafkaVmPublicIp string = kafkaVm.outputs.vmPublicIp
 output kafkaVmPrivateIp string = kafkaVm.outputs.vmPrivateIp
-output kafkaVmSshCommand string = 'ssh ${kafkaVm.outputs.adminUsername}@${kafkaVm.outputs.vmPublicIp}'
+output kafkaVmName string = kafkaVm.outputs.vmName
+output kafkaVmSshCommand string = 'az ssh vm --resource-group rg-kafka-dev-01 --name ${kafkaVm.outputs.vmName}'
 output eventHubNamespaceName string = eventHub.outputs.namespaceName
 output eventHubName string = eventHub.outputs.eventHubName
 output eventHubKafkaEndpoint string = eventHub.outputs.kafkaEndpoint

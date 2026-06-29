@@ -76,4 +76,3 @@ resource dnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2
 // --- Outputs ---
 output privateEndpointId string = privateEndpoint.id
 output privateDnsZoneId string = privateDnsZone.id
-output privateEndpointIp string = privateEndpoint.properties.customDnsConfigs[0].ipAddresses[0]

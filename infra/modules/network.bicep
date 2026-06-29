@@ -7,28 +7,12 @@ param location string
 @description('Base name prefix for resources')
 param namePrefix string
 
-@description('Your public IP address for SSH NSG rule (CIDR notation, e.g. 1.2.3.4/32)')
-param allowedSshSourceIp string
-
 // --- NSG ---
 resource nsg 'Microsoft.Network/networkSecurityGroups@2023-11-01' = {
   name: '${namePrefix}-nsg'
   location: location
   properties: {
     securityRules: [
-      {
-        name: 'AllowSSH'
-        properties: {
-          priority: 1000
-          direction: 'Inbound'
-          access: 'Allow'
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          destinationPortRange: '22'
-          sourceAddressPrefix: allowedSshSourceIp
-          destinationAddressPrefix: 'VirtualNetwork'
-        }
-      }
       {
         name: 'AllowInternalAll'
         properties: {
