@@ -1,0 +1,31 @@
+# Bicep parameters with real values
+*.bicepparam
+!main.bicepparam.example
+
+# Bicep compiled output (ARM JSON)
+infra/main.json
+
+# SSH keys
+*.pem
+id_rsa*
+
+# Terraform (in case we switch later)
+.terraform/
+*.tfstate
+*.tfstate.backup
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Docker
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/settings.json

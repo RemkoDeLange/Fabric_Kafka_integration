@@ -1,0 +1,20 @@
+// Example parameters file — copy to main.bicepparam and fill in your values.
+// Usage: cp main.bicepparam.example main.bicepparam && edit main.bicepparam
+//
+// Then deploy:
+//   az deployment group create -g rg-kafka-dev-01 -f infra/main.bicep -p infra/main.bicepparam
+
+using './main.bicep'
+
+// Azure region (should match your Fabric capacity)
+param location = 'westeurope'
+
+// Short prefix for resource names (lowercase, no hyphens, max 10 chars)
+param namePrefix = 'kafkadev01'
+
+// Your public IP for SSH access. Find it at https://ifconfig.me
+// Format: x.x.x.x/32
+param allowedSshSourceIp = '<YOUR_PUBLIC_IP>/32'
+
+// SSH public key (paste the content of ~/.ssh/id_rsa.pub)
+param adminSshPublicKey = '<YOUR_SSH_PUBLIC_KEY>'
