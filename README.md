@@ -53,6 +53,40 @@ Kafka (mTLS) → Fabric Eventstream (Apache Kafka source + vNet injection) → K
 | **Lower Azure cost** — no Event Hub namespace, no Kafka Connect process | Streaming vNet Data Gateway setup is more involved |
 | **Latest Fabric capabilities** — demonstrates GA Eventstream Kafka connector with private network | Only Fabric can consume from this path (no multi-consumer) |
 
+## When to Use Which Solution
+
+Use this decision guide to select the right architecture for your scenario:
+
+### Choose Solution A (Event Hub Bridge) when:
+
+- **Your organization standardizes on Entra ID** — you need audit trails, conditional access, and RBAC-based authorization without managing certificates
+- **Multiple consumers need the data** — besides Fabric, you also feed Stream Analytics, Azure Functions, or third-party systems from the same stream
+- **You want operational decoupling** — Kafka and Fabric can be upgraded, scaled, or restarted independently with Event Hub absorbing spikes as a buffer
+- **Certificate management is unacceptable** — your security team mandates zero-secret, token-based authentication and will not approve custom CA infrastructure
+- **You're in a regulated environment** — you need fine-grained RBAC, Azure Policy integration, and identity-based access logs that tie back to Entra ID principals
+
+### Choose Solution B (Direct Kafka Ingestion) when:
+
+- **Latency is critical** — you need the shortest path from Kafka partition to KQL table (single network hop, no intermediate store)
+- **Cost is the priority** — you want to avoid the Event Hub namespace cost (~€500+/month for dedicated, ~€30/month for Standard) and keep the architecture lean
+- **Fabric is the sole consumer** — no other services need real-time access to this stream
+- **You already have certificate infrastructure** — you run an internal CA, have rotation automation (e.g., cert-manager), and mTLS is standard practice in your organization
+- **Simplicity of moving parts** — fewer components means fewer failure modes and a smaller blast radius for incidents
+
+### Quick Decision Matrix
+
+| Criterion | Solution A (Event Hub) | Solution B (Direct) |
+|-----------|:---------------------:|:-------------------:|
+| Auth model | OAuth / Managed Identity | mTLS / Certificates |
+| Latency | ~seconds (buffered) | ~milliseconds |
+| Azure cost | Higher (Event Hub + Connect) | Lower (Kafka only) |
+| Multi-consumer | ✅ | ❌ (Fabric only) |
+| Entra ID integration | ✅ | ❌ |
+| Certificate management | Not needed | Required |
+| Fabric feature maturity | GA (2018+) | GA (July 2026) |
+| Operational complexity | Medium (more components) | Low (fewer components) |
+| Best for | Enterprise / multi-team | Single-team / cost-sensitive |
+
 ## Security Model
 
 ### Protocol Hierarchy
