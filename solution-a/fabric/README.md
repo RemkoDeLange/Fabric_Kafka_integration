@@ -6,6 +6,7 @@ These cannot be automated via Bicep — they are configured in the Fabric portal
 ## Prerequisites
 
 - Fabric workspace with F SKU capacity (or Trial) in **West Europe**
+- **Workspace Identity** enabled (Settings → Identity) — required for Entra ID auth to Event Hub
 - Workspace Admin role (needed for Managed Private Endpoints)
 - Event Hub namespace deployed and private endpoint active
 
@@ -50,14 +51,14 @@ Set an ingestion mapping for JSON:
 1. In your Fabric workspace → **Settings** (gear icon) → **Network security**
 2. Under **Managed private endpoints**, click **+ New**
 3. Fill in:
-   - **Name**: `pe-eventhub-kafkadev01`
-   - **Resource ID**: `/subscriptions/<sub-id>/resourceGroups/rg-kafka-dev-01/providers/Microsoft.EventHub/namespaces/kafkadev01-ehns`
+   - **Name**: `pe-eventhub-kafkadev01a`
+   - **Resource ID**: `/subscriptions/<sub-id>/resourceGroups/rg-kafka-bridge-01/providers/Microsoft.EventHub/namespaces/kafkadev01a-ehns`
    - **Target sub-resource**: `namespace`
 4. Click **Create**
 
 ### Approve in Azure Portal
 
-5. Go to Azure Portal → Event Hub namespace `kafkadev01-ehns`
+5. Go to Azure Portal → Event Hub namespace `kafkadev01a-ehns`
 6. **Networking** → **Private endpoint connections** tab
 7. Find the pending connection from Fabric → click **Approve**
 
@@ -72,12 +73,27 @@ Set an ingestion mapping for JSON:
 3. Click **Add source** → **Azure Event Hubs**
 4. Configure:
    - **Connection**: Create new
-   - **Event Hub namespace**: `kafkadev01-ehns`
-   - **Event Hub**: `events-ingest`
+   - **Event Hub namespace**: `kafkadev01a-ehns.servicebus.windows.net`
+   - **Event Hub**: `iot-events`
    - **Consumer group**: `$Default`
-   - **Authentication**: Shared Access Key
-     - Key name: `KafkaConnectPolicy`
-     - Key: *(paste the primary key from Azure CLI output)*
+   - **Authentication**: **Workspace Identity** (Entra ID)
+
+> **Important**: Local auth (SAS keys) is disabled on this namespace (`disableLocalAuth=true`).
+> You must use Workspace Identity authentication. The workspace identity needs the
+> **Azure Event Hubs Data Receiver** role on the Event Hub namespace — assign it alongside
+> the managed private endpoint approval:
+>
+> ```bash
+> WORKSPACE_IDENTITY_OID="<from Fabric workspace Settings → Identity>"
+> EH_NS_ID=$(az eventhubs namespace show -g rg-kafka-bridge-01 -n kafkadev01a-ehns --query id -o tsv)
+>
+> az role assignment create \
+>   --assignee-object-id "$WORKSPACE_IDENTITY_OID" \
+>   --assignee-principal-type ServicePrincipal \
+>   --role "Azure Event Hubs Data Receiver" \
+>   --scope "$EH_NS_ID"
+> ```
+
    - **Data format**: JSON
 5. Click **Add**
 
