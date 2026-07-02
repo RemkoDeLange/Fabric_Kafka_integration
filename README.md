@@ -83,7 +83,7 @@ Use this decision guide to select the right architecture for your scenario:
 | Multi-consumer | ✅ (Azure-native) | ✅ (any Kafka client with mTLS certs) |
 | Entra ID integration | ✅ | ❌ |
 | Certificate management | Not needed | Required |
-| Fabric feature maturity | GA (2018+) | GA (July 2026) |
+| Fabric feature maturity | GA (2023, Eventstream + Event Hub) | GA (July 2026, Eventstream + Kafka source) |
 | Operational complexity | Medium (more components) | Low (fewer components) |
 | Best for | Enterprise / multi-team | Single-team / cost-sensitive |
 
