@@ -51,7 +51,7 @@ Kafka (mTLS) → Fabric Eventstream (Apache Kafka source + vNet injection) → K
 | **Lowest latency** — Eventstream reads directly from Kafka topic (single hop) | Requires certificate lifecycle management (rotation, expiry) |
 | **Full mTLS** — strongest mutual authentication; both sides prove identity via certificates | No Entra ID integration; identity is certificate-based, not token-based |
 | **Lower Azure cost** — no Event Hub namespace, no Kafka Connect process | Streaming vNet Data Gateway setup is more involved |
-| **Latest Fabric capabilities** — demonstrates GA Eventstream Kafka connector with private network | Only Fabric can consume from this path (no multi-consumer) |
+| **Latest Fabric capabilities** — demonstrates GA Eventstream Kafka connector with private network | Additional consumers require mTLS certs + VNet access (no Azure-native endpoint like Event Hub) |
 
 ## When to Use Which Solution
 
@@ -69,7 +69,7 @@ Use this decision guide to select the right architecture for your scenario:
 
 - **Latency is critical** — you need the shortest path from Kafka partition to KQL table (single network hop, no intermediate store)
 - **Cost is the priority** — you want to avoid the Event Hub namespace cost (~€500+/month for dedicated, ~€30/month for Standard) and keep the architecture lean
-- **Fabric is the sole consumer** — no other services need real-time access to this stream
+- **No Azure-native consumers needed** — you don't need Stream Analytics, Functions, or other PaaS services consuming in parallel (they'd each need mTLS certs + VNet access to reach Kafka directly)
 - **You already have certificate infrastructure** — you run an internal CA, have rotation automation (e.g., cert-manager), and mTLS is standard practice in your organization
 - **Simplicity of moving parts** — fewer components means fewer failure modes and a smaller blast radius for incidents
 
@@ -80,7 +80,7 @@ Use this decision guide to select the right architecture for your scenario:
 | Auth model | OAuth / Managed Identity | mTLS / Certificates |
 | Latency | ~seconds (buffered) | ~milliseconds |
 | Azure cost | Higher (Event Hub + Connect) | Lower (Kafka only) |
-| Multi-consumer | ✅ | ❌ (Fabric only) |
+| Multi-consumer | ✅ (Azure-native) | ✅ (any Kafka client with mTLS certs) |
 | Entra ID integration | ✅ | ❌ |
 | Certificate management | Not needed | Required |
 | Fabric feature maturity | GA (2018+) | GA (July 2026) |
