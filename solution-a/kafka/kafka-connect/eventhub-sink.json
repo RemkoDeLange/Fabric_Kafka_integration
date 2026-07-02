@@ -1,0 +1,36 @@
+{
+  "name": "eventhub-sink",
+  "config": {
+    "connector.class": "org.apache.kafka.connect.mirror.MirrorSourceConnector",
+    "tasks.max": "1",
+
+    "topics": "iot-events",
+
+    "source.cluster.alias": "local",
+    "source.cluster.bootstrap.servers": "kafka:9092",
+
+    "target.cluster.alias": "eventhub",
+    "target.cluster.bootstrap.servers": "${EVENTHUB_NAMESPACE}.servicebus.windows.net:9093",
+    "target.cluster.security.protocol": "SASL_SSL",
+    "target.cluster.sasl.mechanism": "OAUTHBEARER",
+    "target.cluster.sasl.jaas.config": "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"${CLIENT_ID}\" clientSecret=\"${CLIENT_SECRET}\" scope=\"https://${EVENTHUB_NAMESPACE}.servicebus.windows.net/.default\";",
+    "target.cluster.sasl.login.callback.handler.class": "org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler",
+    "target.cluster.sasl.oauthbearer.token.endpoint.url": "https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token",
+    "target.cluster.sasl.oauthbearer.scope": "https://${EVENTHUB_NAMESPACE}.servicebus.windows.net/.default",
+
+    "replication.policy.class": "org.apache.kafka.connect.mirror.IdentityReplicationPolicy",
+    "replication.policy.separator": "",
+    "sync.topic.acls.enabled": "false",
+    "sync.topic.configs.enabled": "false",
+    "refresh.topics.interval.seconds": "60",
+
+    "producer.override.security.protocol": "SASL_SSL",
+    "producer.override.sasl.mechanism": "OAUTHBEARER",
+    "producer.override.sasl.jaas.config": "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"${CLIENT_ID}\" clientSecret=\"${CLIENT_SECRET}\" scope=\"https://${EVENTHUB_NAMESPACE}.servicebus.windows.net/.default\";",
+    "producer.override.sasl.login.callback.handler.class": "org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler",
+    "producer.override.sasl.oauthbearer.token.endpoint.url": "https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token",
+    "producer.override.sasl.oauthbearer.scope": "https://${EVENTHUB_NAMESPACE}.servicebus.windows.net/.default",
+    "producer.override.max.request.size": "1048576",
+    "producer.override.request.timeout.ms": "30000"
+  }
+}

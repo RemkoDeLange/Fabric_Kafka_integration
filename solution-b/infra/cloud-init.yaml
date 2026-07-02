@@ -1,0 +1,27 @@
+#cloud-config
+package_update: true
+packages:
+  - docker.io
+  - docker-compose
+  - jq
+
+disk_setup:
+  /dev/disk/azure/scsi1/lun0:
+    table_type: gpt
+    layout: true
+    overwrite: false
+
+fs_setup:
+  - device: /dev/disk/azure/scsi1/lun0-part1
+    filesystem: ext4
+    overwrite: false
+
+mounts:
+  - ["/dev/disk/azure/scsi1/lun0-part1", "/data/kafka", "ext4", "defaults,nofail", "0", "2"]
+
+runcmd:
+  - mkdir -p /data/kafka/broker-data /data/kafka/certs
+  - chown -R 1000:1000 /data/kafka/broker-data
+  - systemctl enable docker
+  - systemctl start docker
+  - usermod -aG docker azureuser

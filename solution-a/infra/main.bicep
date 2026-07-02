@@ -56,6 +56,15 @@ module kafkaVm 'modules/vm-kafka.bicep' = {
   }
 }
 
+// --- RBAC: VM Managed Identity → Event Hubs Data Sender ---
+module roleAssignment 'modules/role-assignment.bicep' = {
+  name: 'roleAssignment'
+  params: {
+    principalId: kafkaVm.outputs.vmPrincipalId
+    eventHubNamespaceId: eventHub.outputs.namespaceId
+  }
+}
+
 // --- Outputs ---
 output kafkaVmPrivateIp string = kafkaVm.outputs.vmPrivateIp
 output kafkaVmName string = kafkaVm.outputs.vmName

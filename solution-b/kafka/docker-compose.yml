@@ -1,0 +1,43 @@
+services:
+  kafka:
+    image: apache/kafka:3.7.1
+    container_name: kafka
+    hostname: kafka
+    ports:
+      - "9092:9092"   # PLAINTEXT (internal, for event-generator on same VM)
+      - "9093:9093"   # SSL/mTLS (for Fabric Eventstream connector)
+    environment:
+      # KRaft mode
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9094
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+
+      # Listeners
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,SSL://0.0.0.0:9093,CONTROLLER://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,SSL://10.1.1.4:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,SSL:SSL,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      # SSL/mTLS configuration
+      KAFKA_SSL_KEYSTORE_TYPE: PEM
+      KAFKA_SSL_KEYSTORE_LOCATION: /etc/kafka/certs/server-cert.pem
+      KAFKA_SSL_KEY_PASSWORD: ""
+      KAFKA_SSL_TRUSTSTORE_TYPE: PEM
+      KAFKA_SSL_TRUSTSTORE_LOCATION: /etc/kafka/certs/ca-cert.pem
+      KAFKA_SSL_CLIENT_AUTH: required
+
+      # Use PEM files directly (Kafka 3.x+ supports this)
+      KAFKA_SSL_KEYSTORE_KEY: ""
+
+      # Broker settings
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+
+      # Cluster ID (KRaft)
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    volumes:
+      - /data/kafka/broker-data:/var/lib/kafka/data
+      - /data/kafka/certs:/etc/kafka/certs:ro

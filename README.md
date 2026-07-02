@@ -1,93 +1,136 @@
-# Private Kafka → Event Hub → Fabric Real-Time Intelligence
+# Private Kafka → Fabric Real-Time Intelligence
 
-End-to-end streaming pipeline: a private-network Kafka cluster forwards events via Kafka Connect to a private Azure Event Hub, which is ingested by Fabric Eventstream into a KQL Database.
+Two independent, production-ready streaming architectures for ingesting events from a **private-network Apache Kafka cluster** into **Microsoft Fabric Real-Time Intelligence** (Eventhouse / KQL Database).
 
-## Architecture
+Each solution is self-contained with its own infrastructure (Bicep), Kafka configuration, event generator, and Fabric setup guide.
+
+## Architecture Overview
 
 ```
-ACI Event Generator → Kafka (VM, KRaft) → Kafka Connect → Event Hub (private) → Fabric Eventstream → KQL Database
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Solution A — "Event Hub Bridge"                                             │
+│                                                                             │
+│  Event Generator → Kafka (KRaft) → Kafka Connect ──→ Event Hub ──→ Fabric  │
+│       (VM)           (VM)         (SASL_OAUTHBEARER)  (Private EP)   RTI    │
+│                                                                             │
+│  Security: OAuth 2.0 / Entra ID / Managed Identity (zero-secret)           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Solution B — "Direct Kafka Ingestion"                                       │
+│                                                                             │
+│  Event Generator → Kafka (KRaft) ──────────────────────────→ Fabric RTI    │
+│       (VM)           (VM, SSL)    (Eventstream Kafka source     Eventhouse  │
+│                                    + Streaming vNet Gateway)                │
+│                                                                             │
+│  Security: mTLS / Custom CA certificates (mutual authentication)           │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-All resources are deployed in a private Azure VNet (West Europe). Event Hub has no public access — connectivity is via Private Endpoint.
+## Solution Comparison
 
-## Prerequisites
+### Solution A — "Event Hub Bridge"
 
-- Azure subscription with Contributor/Owner access
-- Azure CLI installed (`az --version` ≥ 2.60)
-- Fabric capacity (F SKU or Trial) in West Europe
-- SSH key pair for VM access
+Kafka → Kafka Connect (OAuth) → Azure Event Hub → Fabric Eventstream → KQL DB
 
-## Quick Start
+| Pros | Cons |
+|------|------|
+| **Zero-secret auth** — Managed Identity + OAuth eliminates stored credentials | Extra hop adds latency (Kafka → EH → Eventstream) |
+| **Decoupled** — Event Hub acts as a buffer; Kafka and Fabric evolve independently | More moving parts (Kafka Connect, Event Hub, Private Endpoint) |
+| **Proven pattern** — Event Hub Kafka protocol is battle-tested (GA since 2018) | Higher Azure cost (Event Hub TUs + Kafka Connect process) |
+| **Multi-consumer** — Event Hub serves other consumers (Stream Analytics, Functions) alongside Fabric | Kafka Connect requires operational management |
+| **Entra ID native** — Integrates with Azure RBAC, audit logs, conditional access | mTLS not possible on the Event Hub segment |
 
-```bash
-# 1. Login to Azure
-az login
-az account set --subscription "<your-subscription-id>"
+### Solution B — "Direct Kafka Ingestion"
 
-# 2. Create resource group
-az group create --name rg-kafka-dev-01 --location westeurope
+Kafka (mTLS) → Fabric Eventstream (Apache Kafka source + vNet injection) → KQL DB
 
-# 3. Preview deployment (dry run)
-az deployment group what-if \
-  --resource-group rg-kafka-dev-01 \
-  --template-file infra/main.bicep \
-  --parameters infra/main.bicepparam
+| Pros | Cons |
+|------|------|
+| **Simplest architecture** — no Event Hub, no Kafka Connect; fewest components | Newer feature (Kafka connector GA July 2026); less community battle-testing |
+| **Lowest latency** — Eventstream reads directly from Kafka topic (single hop) | Requires certificate lifecycle management (rotation, expiry) |
+| **Full mTLS** — strongest mutual authentication; both sides prove identity via certificates | No Entra ID integration; identity is certificate-based, not token-based |
+| **Lower Azure cost** — no Event Hub namespace, no Kafka Connect process | Streaming vNet Data Gateway setup is more involved |
+| **Latest Fabric capabilities** — demonstrates GA Eventstream Kafka connector with private network | Only Fabric can consume from this path (no multi-consumer) |
 
-# 4. Deploy infrastructure
-az deployment group create \
-  --resource-group rg-kafka-dev-01 \
-  --template-file infra/main.bicep \
-  --parameters infra/main.bicepparam
+## Security Model
 
-# 5. Get outputs (VM IP, Event Hub connection string)
-az deployment group show \
-  --resource-group rg-kafka-dev-01 \
-  --name main \
-  --query properties.outputs
+### Protocol Hierarchy
+
 ```
+Security Protocol (pick ONE per connection):
+│
+├── SSL (mTLS)        ← encryption + certificate-based mutual auth
+│                       Identity = certificate. No passwords or tokens.
+│
+└── SASL_SSL          ← encryption + SASL-based auth
+    │                   Server cert for encryption. SASL proves client identity.
+    │
+    └── SASL Mechanism (pick ONE):
+        ├── PLAIN         ← username + password (e.g., connection string)
+        ├── SCRAM-SHA-512 ← salted challenge-response (hashed, stronger)
+        └── OAUTHBEARER   ← short-lived token from identity provider
+                            └── Microsoft Entra ID (the token issuer)
+```
+
+### What excludes what
+
+| Pair | Relationship |
+|------|-------------|
+| mTLS vs SASL_SSL | **Mutually exclusive** — different security protocols |
+| PLAIN vs SCRAM vs OAUTHBEARER | **Mutually exclusive** — one SASL mechanism per connection |
+| SASL_SSL + OAuth | **Complementary** — OAuth runs *inside* SASL_SSL |
+| SASL_SSL + Entra ID | **Complementary** — Entra ID is the token issuer for OAUTHBEARER |
+| mTLS + OAuth | **Cannot combine** (in Kafka) — different security protocols |
+
+### Per-Solution Security
+
+| Segment | Solution A | Solution B |
+|---------|-----------|-----------|
+| Generator → Kafka | PLAINTEXT (private VNet) | mTLS (client cert required) |
+| Kafka → Fabric | SASL_SSL + OAUTHBEARER (Managed Identity → Event Hub) | SSL/mTLS (Eventstream connector presents client cert from Key Vault) |
+| Network isolation | Private Endpoint (Event Hub) | vNet injection (Streaming vNet Data Gateway) |
+| Secret management | Zero-secret (OAuth tokens auto-rotate) | Certificates in Azure Key Vault (PEM format) |
 
 ## Repo Structure
 
 ```
-├── infra/                    # Bicep IaC
-│   ├── main.bicep            # Orchestrator
-│   ├── main.bicepparam.example  # Parameter template (copy and fill in)
-│   └── modules/
-│       ├── network.bicep
-│       ├── event-hub.bicep
-│       ├── private-endpoint.bicep
-│       └── vm-kafka.bicep
-├── kafka/                    # Kafka configuration
-│   ├── docker-compose.yml
-│   └── kafka-connect/
-│       └── eventhub-sink.json
-├── event-generator/          # Simulated event producer
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── generator.py
-└── fabric/                   # Fabric setup instructions
-    └── README.md
+├── README.md                          ← You are here
+├── solution-a/                        ← Event Hub Bridge
+│   ├── README.md                      # Deployment guide
+│   ├── infra/                         # Bicep: VNet, Event Hub, PE, VM, RBAC
+│   ├── kafka/                         # Docker Compose + Kafka Connect (OAuth)
+│   ├── event-generator/               # Python producer
+│   └── fabric/                        # Eventstream from Event Hub
+│
+└── solution-b/                        ← Direct Kafka Ingestion
+    ├── README.md                      # Deployment guide
+    ├── infra/                         # Bicep: VNet, VM, Key Vault, certs
+    ├── kafka/                         # Docker Compose (SSL/mTLS listener)
+    ├── event-generator/               # Python producer with mTLS
+    └── fabric/                        # Eventstream Kafka source + vNet gateway
 ```
 
-## Deployment Workflow
+## Prerequisites
 
-This is a dev environment — all deployments are manual CLI commands. No pipelines.
+- Azure subscription with Contributor/Owner access
+- Azure CLI ≥ 2.60
+- Fabric capacity (F SKU or Trial) in West Europe
+- SSH key pair (ed25519 recommended)
 
-1. **Deploy infra** (Bicep) → creates VNet, Event Hub, Private Endpoint, Kafka VM
-2. **SSH into VM** → start Kafka + Kafka Connect via Docker Compose
-3. **Deploy event generator** (ACI) → produces events into Kafka
-4. **Configure Fabric** (manual) → Eventstream + KQL Database
+## Quick Start
 
-## Branches
+Each solution deploys independently. See the README in each solution folder:
 
-- `main` — stable, deployed infrastructure
-- `feature/infra` — infrastructure changes
-- `feature/kafka-connect` — Kafka Connect configuration
-- `feature/eventstream-kafka` — future Eventstream Kafka connector testing
+- **[Solution A — Event Hub Bridge](solution-a/README.md)**
+- **[Solution B — Direct Kafka Ingestion](solution-b/README.md)**
 
 ## Cleanup
 
 ```bash
-# Delete all Azure resources
-az group delete --name rg-kafka-dev-01 --yes --no-wait
+# Solution A
+az group delete --name rg-kafka-bridge-01 --yes --no-wait
+
+# Solution B
+az group delete --name rg-kafka-direct-01 --yes --no-wait
 ```
