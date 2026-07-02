@@ -33,15 +33,18 @@ module keyVault 'modules/key-vault.bicep' = {
   }
 }
 
-// --- Certificates (CA + server + client certs → Key Vault) ---
-module certificates 'modules/certificates.bicep' = {
-  name: 'certificates'
-  params: {
-    location: location
-    keyVaultName: keyVault.outputs.keyVaultName
-    kafkaVmIp: '10.1.1.4' // Static private IP for Kafka VM
-  }
-}
+// --- Certificates ---
+// Note: Certificate generation via deploymentScripts requires key-based storage auth.
+// If blocked by policy, generate certs via CLI after deployment (see README).
+// Uncomment if your subscription allows it:
+// module certificates 'modules/certificates.bicep' = {
+//   name: 'certificates'
+//   params: {
+//     location: location
+//     keyVaultName: keyVault.outputs.keyVaultName
+//     kafkaVmIp: '10.1.1.4'
+//   }
+// }
 
 // --- Kafka VM (with mTLS) ---
 module kafkaVm 'modules/vm-kafka.bicep' = {

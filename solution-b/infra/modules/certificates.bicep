@@ -105,4 +105,4 @@ resource certScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
   }
 }
 
-output scriptStatus string = certScript.properties.status
+output scriptName string = certScript.name
