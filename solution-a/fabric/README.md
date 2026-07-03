@@ -88,6 +88,11 @@ Set an ingestion mapping for JSON:
 > available in the connector dropdown, even when network connectivity is via Managed Private
 > Endpoint. This requires `disableLocalAuth=false` on the namespace and a SAS authorization rule.
 
+> **Environment Note**: If your Azure subscription enforces `disableLocalAuth=true` via
+> Defender for Cloud or Azure Policy (common in enterprise/lab environments), SAS authentication
+> will be blocked and this connector cannot function. In that case, consider Solution B
+> (vNet Data Gateway + native Kafka protocol with mTLS), which avoids SAS entirely.
+
 ### Create the SAS Authorization Rule
 
 ```bash

@@ -10,7 +10,7 @@ Private Kafka cluster → Fabric Eventstream (Apache Kafka source connector with
 │                                                          │
 │  ┌─────────────────────────┐   ┌──────────────────────┐ │
 │  │ default subnet          │   │ connector-delegated   │ │
-│  │ (10.1.1.0/24)           │   │ (10.1.2.0/27)        │ │
+│  │ (10.1.1.0/24)           │   │ (10.1.2.0/24)        │ │
 │  │                         │   │                      │ │
 │  │  ┌───────────────────┐  │   │  Streaming vNet      │ │
 │  │  │ Kafka VM (mTLS)   │◄─┼───┼─ Data Gateway        │ │

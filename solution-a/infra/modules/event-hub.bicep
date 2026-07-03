@@ -22,6 +22,7 @@ resource eventHubNamespace 'Microsoft.EventHub/namespaces@2024-01-01' = {
     maximumThroughputUnits: 4
     publicNetworkAccess: 'Disabled'
     minimumTlsVersion: '1.2'
+    disableLocalAuth: false
   }
 }
 

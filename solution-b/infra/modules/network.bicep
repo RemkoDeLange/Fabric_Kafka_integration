@@ -24,12 +24,12 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-01-01' = {
       {
         name: 'connector-delegated'
         properties: {
-          addressPrefix: '10.1.2.0/27'
+          addressPrefix: '10.1.2.0/24'
           delegations: [
             {
               name: 'messagingConnectors'
               properties: {
-                serviceName: 'Microsoft.PowerPlatform/vnetaccesslinks'
+                serviceName: 'Microsoft.MessagingConnectors/Connectors'
               }
             }
           ]

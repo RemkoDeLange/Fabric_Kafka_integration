@@ -8,15 +8,28 @@ Fabric Eventstream connects **directly** to the private Kafka cluster using the 
 
 - Fabric workspace with a **Workspace Identity** (Settings → Identity)
 - The workspace identity needs **Network Contributor** role on the VNet
-- `Microsoft.PowerPlatform` resource provider registered on the subscription
-- Certificates uploaded to Key Vault (done by Bicep deployment)
+- `Microsoft.MessagingConnectors` resource provider registered on the subscription
+- Feature flag `Microsoft.MessagingConnectors/DefaultFeature` must be **Registered** (not Pending)
+- Certificates uploaded to Key Vault in PEM format (done by Bicep deployment)
+- Key Vault accessible from the delegated subnet (same VNet)
 
-## Step 1: Register Resource Provider
+## Step 1: Register Resource Provider & Feature Flag
 
 ```bash
-az provider register --namespace Microsoft.PowerPlatform
-az provider show --namespace Microsoft.PowerPlatform --query registrationState
+# Register the resource provider
+az provider register --namespace Microsoft.MessagingConnectors
+az provider show --namespace Microsoft.MessagingConnectors --query registrationState
+
+# Register the feature flag (required for gateway creation)
+az feature register --namespace Microsoft.MessagingConnectors --name DefaultFeature
+az feature show --namespace Microsoft.MessagingConnectors --name DefaultFeature --query "properties.state" -o tsv
+
+# After feature flag shows 'Registered', re-register provider to propagate
+az provider register --namespace Microsoft.MessagingConnectors
 ```
+
+> **Note**: The feature flag may take time to approve. Gateway creation is blocked until
+> the state changes from `Pending` to `Registered`. See [Known Blockers](#known-blockers).
 
 ## Step 2: Assign Network Contributor to Workspace Identity
 
@@ -35,12 +48,15 @@ az role assignment create \
 
 ## Step 3: Create Streaming vNet Data Gateway
 
-1. In Fabric portal → **Manage connections and gateways**
-2. Click **New** → **Virtual network data gateway**
-3. Configure:
+1. In Fabric portal → **Settings** (gear icon) → **Manage connections and gateways**
+2. Click the **Virtual network data gateways** tab → **+ New**
+3. Select gateway type: **Streaming** (required for Eventstream sources)
+4. Configure:
    - Name: `kafka-mtls-gateway`
+   - Subscription: `ME-MngEnvMCAP675185-redelang-1`
+   - Resource Group: `rg-kafka-direct-01`
    - VNet: `kafkadev01b-vnet`
-   - Subnet: `connector-delegated` (10.1.2.0/27)
+   - Subnet: `connector-delegated` (10.1.2.0/24)
    - Region: West Europe
 
 ## Step 4: Create Eventhouse + KQL Database
@@ -101,11 +117,23 @@ IotEvents
 | render timechart
 ```
 
+## Known Blockers
+
+| Blocker | Status | Notes |
+|---------|--------|-------|
+| `Microsoft.MessagingConnectors/DefaultFeature` stuck at **Pending** | ⏳ Waiting | Raised with internal CAT team 2026-07-03. Gateway creation is impossible until this resolves. Subnet appears greyed out in Fabric portal. |
+
 ## Troubleshooting
 
 | Issue | Resolution |
-|-------|-----------|
-| Eventstream can't connect | Verify gateway subnet has delegation to `Microsoft.PowerPlatform/vnetaccesslinks` |
-| Certificate error | Ensure client cert is signed by same CA uploaded as trust anchor |
+|-------|------------|
+| Subnet greyed out in gateway wizard | Feature flag `DefaultFeature` not yet Registered — wait for approval |
+| Eventstream can't connect | Verify gateway subnet has delegation to `Microsoft.MessagingConnectors/Connectors` |
+| Certificate error | Ensure certs are PEM format in Key Vault with `contentType: application/x-pem-file` |
 | No data flowing | Check Kafka topic has data: `kafka-topics.sh --describe --topic iot-events` |
 | Gateway creation fails | Verify workspace identity has Network Contributor on VNet |
+
+## References
+
+- [Add Apache Kafka source to Eventstream](https://learn.microsoft.com/en-us/fabric/real-time-intelligence/event-streams/add-source-apache-kafka)
+- [Streaming connector VNet support guide](https://learn.microsoft.com/en-us/fabric/real-time-intelligence/event-streams/streaming-connector-private-network-support-guide)
