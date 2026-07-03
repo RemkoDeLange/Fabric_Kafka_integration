@@ -10,20 +10,24 @@ Each solution is self-contained with its own infrastructure (Bicep), Kafka confi
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ Solution A — "Event Hub Bridge"                                             │
 │                                                                             │
-│  Event Generator → Kafka (KRaft) → Kafka Connect ──→ Event Hub ──→ Fabric  │
-│       (VM)           (VM)         (SASL_OAUTHBEARER)  (Private EP)   RTI    │
+│  Event Generator → Kafka (KRaft) → OAuth Bridge ──→ Event Hub ──→ Fabric   │
+│       (VM)           (VM)         (SASL_OAUTHBEARER)  (MPE)        RTI      │
+│                                    Managed Identity               │        │
+│                                                          SAS key ─┘        │
 │                                                                             │
-│  Security: OAuth 2.0 / Entra ID / Managed Identity (zero-secret)           │
+│  Security: OAuth 2.0 / MI (VM→EH) + SAS key (Eventstream→EH)              │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ Solution B — "Direct Kafka Ingestion"                                       │
 │                                                                             │
-│  Event Generator → Kafka (KRaft) ──────────────────────────→ Fabric RTI    │
-│       (VM)           (VM, SSL)    (Eventstream Kafka source     Eventhouse  │
-│                                    + Streaming vNet Gateway)                │
+│  Event Generator → Kafka (KRaft, mTLS) ────────────────────→ Fabric RTI    │
+│       (VM)           (VM, SSL)          (Eventstream Kafka      Eventhouse  │
+│                        ↑                 source + Streaming                 │
+│                   Key Vault              vNet Data Gateway)                 │
+│                  (CA + certs)                                               │
 │                                                                             │
-│  Security: mTLS / Custom CA certificates (mutual authentication)           │
+│  Security: mTLS / Custom CA certificates stored in Key Vault               │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -35,11 +39,11 @@ Kafka → Kafka Connect (OAuth) → Azure Event Hub → Fabric Eventstream → K
 
 | Pros | Cons |
 |------|------|
-| **Zero-secret auth** — Managed Identity + OAuth eliminates stored credentials | Extra hop adds latency (Kafka → EH → Eventstream) |
+| **Near-zero-secret auth** — Managed Identity + OAuth for VM→EH; only a SAS key needed at the Fabric Eventstream boundary | Extra hop adds latency (Kafka → EH → Eventstream) |
 | **Decoupled** — Event Hub acts as a buffer; Kafka and Fabric evolve independently | More moving parts (Kafka Connect, Event Hub, Private Endpoint) |
 | **Proven pattern** — Event Hub Kafka protocol is battle-tested (GA since 2018) | Higher Azure cost (Event Hub TUs + Kafka Connect process) |
 | **Multi-consumer** — Event Hub serves other consumers (Stream Analytics, Functions) alongside Fabric | Kafka Connect requires operational management |
-| **Entra ID native** — Integrates with Azure RBAC, audit logs, conditional access | mTLS not possible on the Event Hub segment |
+| **Entra ID native** — Integrates with Azure RBAC, audit logs, conditional access (VM→EH segment) | Eventstream connector requires SAS key today (no Workspace Identity option) |
 
 ### Solution B — "Direct Kafka Ingestion"
 
@@ -62,7 +66,7 @@ Use this decision guide to select the right architecture for your scenario:
 - **Your organization standardizes on Entra ID** — you need audit trails, conditional access, and RBAC-based authorization without managing certificates
 - **Multiple consumers need the data** — besides Fabric, you also feed Stream Analytics, Azure Functions, or third-party systems from the same stream
 - **You want operational decoupling** — Kafka and Fabric can be upgraded, scaled, or restarted independently with Event Hub absorbing spikes as a buffer
-- **Certificate management is unacceptable** — your security team mandates zero-secret, token-based authentication and will not approve custom CA infrastructure
+- **Certificate management is unacceptable** — your security team prefers token-based authentication and will not approve custom CA infrastructure (note: a single SAS key is still required for the Fabric Eventstream connector today)
 - **You're in a regulated environment** — you need fine-grained RBAC, Azure Policy integration, and identity-based access logs that tie back to Entra ID principals
 
 ### Choose Solution B (Direct Kafka Ingestion) when:
@@ -77,7 +81,7 @@ Use this decision guide to select the right architecture for your scenario:
 
 | Criterion | Solution A (Event Hub) | Solution B (Direct) |
 |-----------|:---------------------:|:-------------------:|
-| Auth model | OAuth / Managed Identity | mTLS / Certificates |
+| Auth model | OAuth / MI (VM→EH) + SAS key (Eventstream→EH) | mTLS / Certificates |
 | Latency | ~seconds (buffered) | ~milliseconds |
 | Azure cost | Higher (Event Hub + Connect) | Lower (Kafka only) |
 | Multi-consumer | ✅ (Azure-native) | ✅ (any Kafka client with mTLS certs) |
@@ -122,9 +126,11 @@ Security Protocol (pick ONE per connection):
 | Segment | Solution A | Solution B |
 |---------|-----------|-----------|
 | Generator → Kafka | PLAINTEXT (private VNet) | mTLS (client cert required) |
-| Kafka → Fabric | SASL_SSL + OAUTHBEARER (Managed Identity → Event Hub) | SSL/mTLS (Eventstream connector presents client cert from Key Vault) |
-| Network isolation | Private Endpoint (Event Hub) | vNet injection (Streaming vNet Data Gateway) |
-| Secret management | Zero-secret (OAuth tokens auto-rotate) | Certificates in Azure Key Vault (PEM format) |
+| Kafka → Event Hub | SASL_SSL + OAUTHBEARER (Managed Identity) | N/A |
+| Eventstream → Event Hub | SAS Key (Shared Access Key — connector limitation) | N/A |
+| Eventstream → Kafka | N/A | SSL/mTLS (Eventstream connector presents client cert from Key Vault) |
+| Network isolation | Managed Private Endpoint (Event Hub) | vNet injection (Streaming vNet Data Gateway) |
+| Secret management | SAS key (Listen-only, stored in Fabric connection) | Certificates in Azure Key Vault (PEM format) |
 
 ## Repo Structure
 

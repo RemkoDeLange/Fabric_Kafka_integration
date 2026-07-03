@@ -30,7 +30,8 @@ Private Kafka cluster → OAuth bridge (Managed Identity) → Azure Event Hub �
 │ ├── iot-events (4 partitions)        │
 │ └── Kafka protocol enabled           │
 │                                      │
-│ Auth: Entra ID only (local auth off) │
+│ Auth: Entra ID (VM→EH) + SAS key  │
+│       (Eventstream connector)        │
 └──────────────────────┬───────────────┘
                        │
                        ▼
@@ -46,10 +47,11 @@ Private Kafka cluster → OAuth bridge (Managed Identity) → Azure Event Hub �
 ## Security
 
 - **VM → Event Hub**: SASL_SSL with OAUTHBEARER (Managed Identity)
-- **Network**: Private Endpoint for Event Hub; no public access
-- **Identity**: System-assigned Managed Identity with "Event Hubs Data Sender" RBAC role
-- **Local auth disabled**: SAS keys / connection strings cannot be used — Entra ID only
-- **Zero secrets**: No credentials stored; tokens auto-refresh from IMDS
+- **Eventstream → Event Hub**: Shared Access Key (Listen-only SAS policy — connector limitation)
+- **Network**: Managed Private Endpoint for Event Hub; no public access
+- **Identity**: System-assigned Managed Identity with "Event Hubs Data Sender" RBAC role (VM side)
+- **Local auth**: Enabled (required for Eventstream SAS connector); scoped to Listen-only
+- **Near-zero secrets**: Only a single SAS key stored in Fabric cloud connection; VM side is fully passwordless
 
 ## Components
 

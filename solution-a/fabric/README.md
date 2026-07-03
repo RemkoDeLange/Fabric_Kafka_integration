@@ -69,35 +69,48 @@ Set an ingestion mapping for JSON:
 ## Step 3: Create Eventstream
 
 1. In your Fabric workspace → **+ New** → **Eventstream**
-2. Name: `iot-events-stream`
+2. Name: `eh-to-kql-stream`
 3. Click **Add source** → **Azure Event Hubs**
 4. Configure:
    - **Connection**: Create new
    - **Event Hub namespace**: `kafkadev01a-ehns.servicebus.windows.net`
-   - **Event Hub**: `iot-events`
+   - **Event Hub**: `events-ingest`
+   - **Shared Access Key Name**: `fabric-listen`
+   - **Shared Access Key**: *(from authorization rule — see below)*
    - **Consumer group**: `$Default`
-   - **Authentication**: **Workspace Identity** (Entra ID)
-
-> **Important**: Local auth (SAS keys) is disabled on this namespace (`disableLocalAuth=true`).
-> You must use Workspace Identity authentication. The workspace identity needs the
-> **Azure Event Hubs Data Receiver** role on the Event Hub namespace — assign it alongside
-> the managed private endpoint approval:
->
-> ```bash
-> WORKSPACE_IDENTITY_OID="<from Fabric workspace Settings → Identity>"
-> EH_NS_ID=$(az eventhubs namespace show -g rg-kafka-bridge-01 -n kafkadev01a-ehns --query id -o tsv)
->
-> az role assignment create \
->   --assignee-object-id "$WORKSPACE_IDENTITY_OID" \
->   --assignee-principal-type ServicePrincipal \
->   --role "Azure Event Hubs Data Receiver" \
->   --scope "$EH_NS_ID"
-> ```
-
+   - **Authentication**: **Shared Access Key**
    - **Data format**: JSON
+   - **Skip test connection**: ✅ *(public access is disabled; MPE handles connectivity)*
 5. Click **Add**
 
-> Note: "Test connection" may fail for private endpoints — this is expected. Proceed anyway.
+> **Known Limitation (as of July 2026)**: The Eventstream Azure Event Hub source connector
+> supports **only** Shared Access Key authentication. Workspace Identity / Entra ID is not
+> available in the connector dropdown, even when network connectivity is via Managed Private
+> Endpoint. This requires `disableLocalAuth=false` on the namespace and a SAS authorization rule.
+
+### Create the SAS Authorization Rule
+
+```bash
+# Create a Listen-only policy on the event hub
+az eventhubs eventhub authorization-rule create \
+  --name fabric-listen \
+  --namespace-name kafkadev01a-ehns \
+  --resource-group rg-kafka-bridge-01 \
+  --eventhub-name events-ingest \
+  --rights Listen
+
+# Retrieve the key
+az eventhubs eventhub authorization-rule keys list \
+  --name fabric-listen \
+  --namespace-name kafkadev01a-ehns \
+  --resource-group rg-kafka-bridge-01 \
+  --eventhub-name events-ingest \
+  --query primaryKey -o tsv
+```
+
+> **Security note**: The VM→Event Hub path remains fully passwordless (OAuth/Managed Identity).
+> Only the Fabric Eventstream ingestion leg requires this SAS key, scoped to Listen-only on a
+> single event hub. The key is stored in Fabric's encrypted cloud connection store.
 
 ### Add Destination
 
