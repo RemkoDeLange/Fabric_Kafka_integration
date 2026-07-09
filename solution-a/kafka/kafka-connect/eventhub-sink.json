@@ -1,10 +1,12 @@
 {
-  "name": "eventhub-sink",
+  "name": "eventhub-mirror",
   "config": {
     "connector.class": "org.apache.kafka.connect.mirror.MirrorSourceConnector",
     "tasks.max": "1",
-
     "topics": "iot-events",
+
+    "key.converter": "org.apache.kafka.connect.converters.ByteArrayConverter",
+    "value.converter": "org.apache.kafka.connect.converters.ByteArrayConverter",
 
     "source.cluster.alias": "local",
     "source.cluster.bootstrap.servers": "kafka:9092",
@@ -12,11 +14,8 @@
     "target.cluster.alias": "eventhub",
     "target.cluster.bootstrap.servers": "${EVENTHUB_NAMESPACE}.servicebus.windows.net:9093",
     "target.cluster.security.protocol": "SASL_SSL",
-    "target.cluster.sasl.mechanism": "OAUTHBEARER",
-    "target.cluster.sasl.jaas.config": "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"${CLIENT_ID}\" clientSecret=\"${CLIENT_SECRET}\" scope=\"https://${EVENTHUB_NAMESPACE}.servicebus.windows.net/.default\";",
-    "target.cluster.sasl.login.callback.handler.class": "org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler",
-    "target.cluster.sasl.oauthbearer.token.endpoint.url": "https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token",
-    "target.cluster.sasl.oauthbearer.scope": "https://${EVENTHUB_NAMESPACE}.servicebus.windows.net/.default",
+    "target.cluster.sasl.mechanism": "PLAIN",
+    "target.cluster.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$ConnectionString\" password=\"${EVENTHUB_CONNECTION_STRING}\";",
 
     "replication.policy.class": "org.apache.kafka.connect.mirror.IdentityReplicationPolicy",
     "replication.policy.separator": "",
@@ -24,12 +23,10 @@
     "sync.topic.configs.enabled": "false",
     "refresh.topics.interval.seconds": "60",
 
+    "producer.override.bootstrap.servers": "${EVENTHUB_NAMESPACE}.servicebus.windows.net:9093",
     "producer.override.security.protocol": "SASL_SSL",
-    "producer.override.sasl.mechanism": "OAUTHBEARER",
-    "producer.override.sasl.jaas.config": "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=\"${CLIENT_ID}\" clientSecret=\"${CLIENT_SECRET}\" scope=\"https://${EVENTHUB_NAMESPACE}.servicebus.windows.net/.default\";",
-    "producer.override.sasl.login.callback.handler.class": "org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler",
-    "producer.override.sasl.oauthbearer.token.endpoint.url": "https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token",
-    "producer.override.sasl.oauthbearer.scope": "https://${EVENTHUB_NAMESPACE}.servicebus.windows.net/.default",
+    "producer.override.sasl.mechanism": "PLAIN",
+    "producer.override.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$ConnectionString\" password=\"${EVENTHUB_CONNECTION_STRING}\";",
     "producer.override.max.request.size": "1048576",
     "producer.override.request.timeout.ms": "30000"
   }

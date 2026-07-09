@@ -10,12 +10,12 @@ Each solution is self-contained with its own infrastructure (Bicep), Kafka confi
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ Solution A — "Event Hub Bridge"                                             │
 │                                                                             │
-│  Event Generator → Kafka (KRaft) → OAuth Bridge ──→ Event Hub ──→ Fabric   │
-│       (VM)           (VM)         (SASL_OAUTHBEARER)  (MPE)        RTI      │
-│                                    Managed Identity               │        │
-│                                                          SAS key ─┘        │
+│  Event Generator → Kafka (KRaft) → Kafka Connect ─→ Event Hub ──→ Fabric   │
+│       (VM)           (VM)         (MirrorSource       (PE+MPE)     RTI      │
+│                                    SASL_PLAIN)                   │        │
+│                                                         SAS key ─┘        │
 │                                                                             │
-│  Security: OAuth 2.0 / MI (VM→EH) + SAS key (Eventstream→EH)              │
+│  Security: SAS key (Connect→EH) + SAS key (Eventstream→EH)                │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -35,15 +35,15 @@ Each solution is self-contained with its own infrastructure (Bicep), Kafka confi
 
 ### Solution A — "Event Hub Bridge"
 
-Kafka → Kafka Connect (OAuth) → Azure Event Hub → Fabric Eventstream → KQL DB
+Kafka → Kafka Connect (MirrorSourceConnector, SASL_PLAIN) → Azure Event Hub → Fabric Eventstream → KQL DB
 
 | Pros | Cons |
 |------|------|
-| **Near-zero-secret auth** — Managed Identity + OAuth for VM→EH; only a SAS key needed at the Fabric Eventstream boundary | Extra hop adds latency (Kafka → EH → Eventstream) |
+| **Decoupled auth** — SAS connection string for VM→EH and Eventstream→EH; EH entity-level SAS policies scope access | Extra hop adds latency (Kafka → EH → Eventstream) |
 | **Decoupled** — Event Hub acts as a buffer; Kafka and Fabric evolve independently | More moving parts (Kafka Connect, Event Hub, Private Endpoint) |
 | **Proven pattern** — Event Hub Kafka protocol is battle-tested (GA since 2018) | Higher Azure cost (Event Hub TUs + Kafka Connect process) |
-| **Multi-consumer** — Event Hub serves other consumers (Stream Analytics, Functions) alongside Fabric | Kafka Connect requires operational management |
-| **Entra ID native** — Integrates with Azure RBAC, audit logs, conditional access (VM→EH segment) | Eventstream connector requires SAS key today (no Workspace Identity option) |
+| **Proven pattern** — Event Hub Kafka protocol is battle-tested (GA since 2018) | Kafka Connect requires operational management |
+| **Multi-consumer** — Event Hub serves other consumers (Stream Analytics, Functions) alongside Fabric | Eventstream connector requires SAS key today (no Workspace Identity option) |
 
 ### Solution B — "Direct Kafka Ingestion"
 
@@ -63,11 +63,10 @@ Use this decision guide to select the right architecture for your scenario:
 
 ### Choose Solution A (Event Hub Bridge) when:
 
-- **Your organization standardizes on Entra ID** — you need audit trails, conditional access, and RBAC-based authorization without managing certificates
-- **Multiple consumers need the data** — besides Fabric, you also feed Stream Analytics, Azure Functions, or third-party systems from the same stream
+- **Multiple consumers need the data** — besides Fabric, you also feed Stream Analytics, Azure Functions, or third-party systems from the same stream via Event Hub
 - **You want operational decoupling** — Kafka and Fabric can be upgraded, scaled, or restarted independently with Event Hub absorbing spikes as a buffer
-- **Certificate management is unacceptable** — your security team prefers token-based authentication and will not approve custom CA infrastructure (note: a single SAS key is still required for the Fabric Eventstream connector today)
-- **You're in a regulated environment** — you need fine-grained RBAC, Azure Policy integration, and identity-based access logs that tie back to Entra ID principals
+- **Certificate management is unacceptable** — SAS connection strings are simpler to manage than mTLS certificate infrastructure (CA, rotation, expiry)
+- **You need a proven, battle-tested pattern** — Event Hub Kafka protocol has been GA since 2018 with broad community support
 
 ### Choose Solution B (Direct Kafka Ingestion) when:
 
@@ -81,11 +80,11 @@ Use this decision guide to select the right architecture for your scenario:
 
 | Criterion | Solution A (Event Hub) | Solution B (Direct) |
 |-----------|:---------------------:|:-------------------:|
-| Auth model | OAuth / MI (VM→EH) + SAS key (Eventstream→EH) | mTLS / Certificates |
+| Auth model | SAS key (Connect→EH + Eventstream→EH) | mTLS / Certificates |
 | Latency | ~seconds (buffered) | ~milliseconds |
 | Azure cost | Higher (Event Hub + Connect) | Lower (Kafka only) |
 | Multi-consumer | ✅ (Azure-native) | ✅ (any Kafka client with mTLS certs) |
-| Entra ID integration | ✅ | ❌ |
+| Entra ID integration | ❌ (SAS key) | ❌ (certificates) |
 | Certificate management | Not needed | Required |
 | Fabric feature maturity | GA (2023, Eventstream + Event Hub) | GA (July 2026, Eventstream + Kafka source) |
 | Operational complexity | Medium (more components) | Low (fewer components) |
